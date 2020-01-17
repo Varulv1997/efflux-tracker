@@ -1,7 +1,7 @@
 /**
  * The MIT License (MIT)
  *
- * Igor Zinken 2016-2019 - https://www.igorski.nl
+ * Igor Zinken 2016-2020 - https://www.igorski.nl
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy of
  * this software and associated documentation files (the "Software"), to deal in
@@ -21,6 +21,8 @@
  * CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 import LZString from 'lz-string';
+import { CompressString } from 'demolishedcompressor';
+import unpack from 'demolishedcompressor/src/unpack';
 
 let storage;
 
@@ -51,18 +53,15 @@ const StorageUtil =
      * @param {string} key
      * @return {Promise}
      */
-    getItem( key ) {
-        return new Promise(( resolve, reject ) => {
-            if ( !StorageUtil.isAvailable() ) {
-                reject( Error( 'Storage not available' ));
-            }
-            const data = storage.getItem( key );
-            if ( data ) {
-                resolve( decompress( data ));
-            } else {
-                reject( Error( `Data for '${key}' not found'` ));
-            }
-        });
+    async getItem( key ) {
+        if ( !StorageUtil.isAvailable() ) {
+            throw new Error( 'Storage not available' );
+        }
+        const data = storage.getItem( key );
+        if ( !data ) {
+            throw new Error( `Data for '${key}' not found'` );
+        }
+        return await decompress( data );
     },
     /**
      * set an item in storage, returns a Promise
@@ -71,8 +70,8 @@ const StorageUtil =
      * @param {*} data
      * @return {Promise}
      */
-    setItem( key, data ){
-        const compressedData = compress( data );
+    async setItem( key, data ){
+        const compressedData = await compress( data );
         return new Promise(( resolve, reject ) => {
             if ( !StorageUtil.isAvailable() ) {
                 reject( Error( 'Storage not available' ));
@@ -102,20 +101,19 @@ export default StorageUtil;
 // by compressing the stringified Objects we can maximize
 // the amount data we can save in the applications quota in LocalStorage
 
-function compress( string ) {
+async function compress( string ) {
     let compressedString;
     try {
-        compressedString = LZString.compressToUTF16( string );
+        const /* Uint8Array */ data = await CompressString.Pngify( string );
+        compressedString = JSON.stringify(Array.from( data ));
     }
     catch ( e ) {
         return string;
     }
-    /*
     console.log(
         "Compressed " + string.length + " to " + compressedString.length + " (" +
         (( compressedString.length / string.length ) * 100 ).toFixed( 2 ) + "% of original size)"
     );
-    */
     return compressedString;
 }
 
@@ -123,10 +121,18 @@ function decompress( string ) {
     let decompressedString;
 
     try {
-        decompressedString = LZString.decompressFromUTF16( string );
+        // decompress demolishedcompressor output
+        const storedData = new Uint8Array( JSON.parse( string ));
+        console.warn(unpack);
+        return unpack( storedData );
     }
     catch ( e ) {
-        return string;
+        try {
+            // legacy songs used LZ compression instead of demolishedcompressor
+            decompressedString = LZString.decompressFromUTF16( string );
+        } catch ( e ) {
+            return string;
+        }
     }
 
     // shorter length implies that given string could not be decompressed

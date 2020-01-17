@@ -200,7 +200,7 @@ export default {
                 persistState(state);
 
                 // save song into storage
-                StorageUtil.setItem(getStorageKeyForSong(song), SongAssemblyService.disassemble(song));
+                await StorageUtil.setItem(getStorageKeyForSong(song), SongAssemblyService.disassemble(song));
 
                 commit('publishMessage', PubSubMessages.SONG_SAVED);
                 if (state.showSaveMessage) {
